@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Vendas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 80%;
+            margin: auto;
+            overflow: hidden;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            display: inline-block;
+            background: #333;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f4f4f4;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        #total {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        #cash-amount-container {
+            margin-top: 10px;
+        }
+
+        #change-display {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Registro de Vendas</h1>
+        <form id="sale-form">
+            <div class="form-group">
+                <label for="barcode">Código de Barras:</label>
+                <input type="text" id="barcode" required>
+            </div>
+            <div class="form-group">
+                <label for="product-name">Nome do Produto:</label>
+                <input type="text" id="product-name" required>
+            </div>
+            <div class="form-group">
+                <label for="price">Preço:</label>
+                <input type="number" id="price" step="0.01" required>
+            </div>
+            <button type="submit">Adicionar Item</button>
+        </form>
+
+        <table id="sale-items">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Produto</th>
+                    <th>Preço</th>
+                    <th>Quantidade</th>
+                    <th>Subtotal</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div id="total">Total: R$ 0.00</div>
+        <button id="finalize-sale">Finalizar Venda</button>
+        <button id="view-history">Ver Histórico de Vendas</button>
+    </div>
+
+    <div id="payment-modal" class="modal">
+        <div class="modal-content">
+            <h2>Selecione a forma de pagamento</h2>
+            <form id="payment-form">
+                <div>
+                    <input type="radio" id="credit" name="payment-method" value="credit" checked>
+                    <label for="credit">Crédito</label>
+                </div>
+                <div>
+                    <input type="radio" id="debit" name="payment-method" value="debit">
+                    <label for="debit">Débito</label>
+                </div>
+                <div>
+                    <input type="radio" id="pix" name="payment-method" value="pix">
+                    <label for="pix">PIX</label>
+                </div>
+                <div>
+                    <input type="radio" id="cash" name="payment-method" value="cash">
+                    <label for="cash">Dinheiro</label>
+                </div>
+                <div id="cash-amount-container" style="display: none;">
+                    <label for="cash-amount">Valor em dinheiro:</label>
+                    <input type="number" id="cash-amount" step="0.01">
+                </div>
+                <div id="change-display"></div>
+                <button type="submit">Confirmar Pagamento</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="history-modal" class="modal">
+        <div class="modal-content">
+            <h2>Histórico de Vendas</h2>
+            <table id="sales-history">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Total</th>
+                        <th>Método de Pagamento</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <button id="close-history">Fechar</button>
+        </div>
+    </div>
+
+    <div id="sale-details-modal" class="modal">
+        <div class="modal-content">
+            <h2>Detalhes da Venda</h2>
+            <div id="sale-details"></div>
+            <button id="close-details">Fechar</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const saleForm = document.getElementById('sale-form');
+            const saleItems = document.getElementById('sale-items');
+            const totalDisplay = document.getElementById('total');
+            const finalizeSaleBtn = document.getElementById('finalize-sale');
+            const viewHistoryBtn = document.getElementById('view-history');
+            const paymentModal = document.getElementById('payment-modal');
+            const paymentForm = document.getElementById('payment-form');
+            const historyModal = document.getElementById('history-modal');
+            const closeHistoryBtn = document.getElementById('close-history');
+            const saleDetailsModal = document.getElementById('sale-details-modal');
+            const closeDetailsBtn = document.getElementById('close-details');
+            const cashAmountContainer = document.getElementById('cash-amount-container');
+            const cashAmountInput = document.getElementById('cash-amount');
+            const changeDisplay = document.getElementById('change-display');
+
+            let currentSale = [];
+            let editingItemIndex = -1;
+
+            saleForm.addEventListener('submit', addItem);
+            finalizeSaleBtn.addEventListener('click', openPaymentModal);
+            viewHistoryBtn.addEventListener('click', openHistoryModal);
+            paymentForm.addEventListener('submit', finalizeSale);
+            closeHistoryBtn.addEventListener('click', closeHistoryModal);
+            closeDetailsBtn.addEventListener('click', closeSaleDetailsModal);
+
+            document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
+                radio.addEventListener('change', toggleCashAmountInput);
+            });
+
+            cashAmountInput.addEventListener('input', calculateChange);
+
+            function addItem(e) {
+                e.preventDefault();
+                const barcode = document.getElementById('barcode').value;
+                const productName = document.getElementById('product-name').value;
+                const price = parseFloat(document.getElementById('price').value);
+
+                if (editingItemIndex === -1) {
+                    const existingItemIndex = currentSale.findIndex(item => item.barcode === barcode);
+                    if (existingItemIndex !== -1) {
+                        currentSale[existingItemIndex].quantity += 1;
+                    } else {
+                        currentSale.push({ barcode, name: productName, price, quantity: 1 });
+                    }
+                } else {
+                    currentSale[editingItemIndex] = { barcode, name: productName, price, quantity: currentSale[editingItemIndex].quantity };
+                    editingItemIndex = -1;
+                }
+
+                updateSaleTable();
+                saleForm.reset();
+            }
+
+            function updateSaleTable() {
+                const tbody = saleItems.querySelector('tbody');
+                tbody.innerHTML = '';
+                let total = 0;
+
+                currentSale.forEach((item, index) => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${item.barcode}</td>
+                        <td>${item.name}</td>
+                        <td>R$ ${item.price.toFixed(2)}</td>
+                        <td>${item.quantity}</td>
+                        <td>R$ ${(item.price * item.quantity).toFixed(2)}</td>
+                        <td>
+                            <button onclick="editItem(${index})">Editar</button>
+                            <button onclick="removeItem(${index})">Remover</button>
+                        </td>
+                    `;
+                    total += item.price * item.quantity;
+                });
+
+                totalDisplay.textContent = `Total: R$ ${total.toFixed(2)}`;
+            }
+
+            window.editItem = function(index) {
+                const item = currentSale[index];
+                document.getElementById('barcode').value = item.barcode;
+                document.getElementById('product-name').value = item.name;
+                document.getElementById('price').value = item.price;
+                editingItemIndex = index;
+            }
+
+            window.removeItem = function(index) {
+                currentSale.splice(index, 1);
+                updateSaleTable();
+            }
+
+            function openPaymentModal() {
+                if (currentSale.length === 0) {
+                    alert('Adicione itens à venda antes de finalizar.');
+                    return;
+                }
+                paymentModal.style.display = 'block';
+            }
+
+            function toggleCashAmountInput() {
+                const isCash = document.getElementById('cash').checked;
+                cashAmountContainer.style.display = isCash ? 'block' : 'none';
+                changeDisplay.textContent = '';
+            }
+
+            function calculateChange() {
+                const total = currentSale.reduce((sum, item) => sum + item.price * item.quantity, 0);
+                const cashAmount = parseFloat(cashAmountInput.value) || 0;
+                const change = cashAmount - total;
+                if (change >= 0) {
+                    changeDisplay.textContent = `Troco: R$ ${change.toFixed(2)}`;
+                } else {
+                    changeDisplay.textContent = 'Valor insuficiente';
+                }
+            }
+
+            function finalizeSale(e) {
+                e.preventDefault();
+                const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
+                const total = currentSale.reduce((sum, item) => sum + item.price * item.quantity, 0);
+                const cashAmount = paymentMethod === 'cash' ? parseFloat(cashAmountInput.value) : null;
+                const change = cashAmount ? cashAmount - total : null;
+
+                if (paymentMethod === 'cash' && (isNaN(cashAmount) || cashAmount < total)) {
+                    alert('Valor em dinheiro inválido ou insuficiente.');
+                    return;
+                }
+
+                const sale = {
+                    items: currentSale,
+                    total,
+                    date: new Date().toISOString(),
+                    paymentMethod,
+                    cashAmount,
+                    change
+                };
+
+                const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+                sales.push(sale);
+                localStorage.setItem('sales', JSON.stringify(sales));
+
+                currentSale = [];
+                updateSaleTable();
+                paymentModal.style.display = 'none';
+                paymentForm.reset();
+            }
+
+            function openHistoryModal() {
+                const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+                const tbody = document.querySelector('#sales-history tbody');
+                tbody.innerHTML = '';
+
+                sales.forEach((sale, index) => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${new Date(sale.date).toLocaleString()}</td>
+                        <td>R$ ${sale.total.toFixed(2)}</td>
+                        <td>${sale.paymentMethod}</td>
+                        <td><button onclick="viewSaleDetails(${index})">Ver Detalhes</button></td>
+                    `;
+                });
+
+                historyModal.style.display = 'block';
+            }
+
+            window.viewSaleDetails = function(index) {
+                const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+                const sale = sales[index];
+                const saleDetails = document.getElementById('sale-details');
+                
+                let detailsHTML = `
+                    <p><strong>Data:</strong> ${new Date(sale.date).toLocaleString()}</p>
+                    <p><strong>Método de Pagamento:</strong> ${sale.paymentMethod}</p>
+                    <p><strong>Total:</strong> R$ ${sale.total.toFixed(2)}</p>
+                `;
+
+                if (sale.cashAmount !== null) {
+                    detailsHTML += `<p><strong>Valor Pago em Dinheiro:</strong> R$ ${sale.cashAmount.toFixed(2)}</p>`;
+                }
+                if (sale.change !== null) {
+                    detailsHTML += `<p><strong>Troco:</strong> R$ ${sale.change.toFixed(2)}</p>`;
+                }
+
+                detailsHTML += '<h3>Itens:</h3><table><thead><tr><th>Produto</th><th>Quantidade</th><th>Preço Unitário</th><th>Subtotal</th></tr></thead><tbody>';
+
+                sale.items.forEach(item => {
+                    detailsHTML += `
+                        <tr>
+                            <td>${item.name}</td>
+                            <td>${item.quantity}</td>
+                            <td>R$ ${item.price.toFixed(2)}</td>
+                            <td>R$ ${(item.price * item.quantity).toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+
+                detailsHTML += '</tbody></table>';
+
+                saleDetails.innerHTML = detailsHTML;
+                saleDetailsModal.style.display = 'block';
+            }
+
+            function closeHistoryModal() {
+                historyModal.style.display = 'none';
+            }
+
+            function closeSaleDetailsModal() {
+                saleDetailsModal.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
